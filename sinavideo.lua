@@ -118,6 +118,7 @@ set_item = function(url)
       context = {
         ["digests"]={},
         ["media_urls"]={},
+        ["video_files"]={},
         ["warc_digests"]={}
       }
       item_value = new_item_value
@@ -345,6 +346,9 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     end
     discover_item(discovered_items, "vid:" .. file_id)
     ids[file_id] = true
+    if context["video_files"][file_id] == nil then
+      context["video_files"][file_id] = false
+    end
     check("https://s.video.sina.com.cn/video/getvideoidbyvid?vid=" .. file_id)
     check("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc")
     check_media("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&direct=1")
@@ -561,6 +565,9 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     end
     if html then
       local decoded_html = string.gsub(html, "\\/", "/")
+      for vid in string.gmatch(decoded_html, "[%s{,][\"']?vid[\"']?%s*:%s*[\"']?([0-9]+)") do
+        discover_item(discovered_items, "vid:" .. vid)
+      end
       for _, image_key in pairs({"mainPic", "thumbnailUrl"}) do
         for image_url in string.gmatch(decoded_html, '"' .. image_key .. '"%s*:%s*"([^"]+)"') do
           force_check(image_url)
@@ -712,7 +719,10 @@ wget.callbacks.write_to_warc = function(url, http_stat)
       error("File does not match etag.")
     end
     context["digests"][url["url"]] = "sha1:" .. basexx.to_base32(sha1:final())
-    context["media_found"] = true
+    local video_file_id, extension = string.match(lower_url, "^https://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.([a-z0-9]+)$")
+    if video_file_id and (extension == "flv" or extension == "hlv" or extension == "mp4") then
+      context["video_files"][video_file_id] = true
+    end
   end
   if abortgrab then
     print("Not writing to WARC.")
@@ -778,12 +788,6 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
       io.stdout:write(" Skipping.\n")
       io.stdout:flush()
       tries = 0
-      if not (
-        string.match(lower_url, "^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?")
-        or string.match(lower_url, "^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?")
-      ) then
-        return wget.actions.EXIT
-      end
       abort_item()
       return wget.actions.EXIT
     end
@@ -815,8 +819,15 @@ wget.callbacks.finish = function(start_time, end_time, wall_time, numurls, total
       error("WARC digest does not match downloaded data.")
     end
   end
-  if item_type == "video" and not context["media_found"] then
-    abort_item()
+  if item_type == "video" then
+    if next(context["video_files"]) == nil then
+      abort_item()
+    end
+    for file_id, archived in pairs(context["video_files"]) do
+      if not archived then
+        error("No video archived for vid " .. file_id .. ".")
+      end
+    end
   end
 
   local function submit_backfeed(items, key)
