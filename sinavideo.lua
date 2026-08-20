@@ -660,6 +660,8 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   end
 
   local lower_url = string.lower(url["url"])
+  local video_file_id, extension = string.match(lower_url, "^https://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.([a-z0-9]+)$")
+  local video_candidate = video_file_id and (extension == "flv" or extension == "hlv" or extension == "mp4")
   if not (
     status_code == 200
     or (
@@ -682,12 +684,14 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   end
   if http_stat["len"] == 0
     and status_code == 200
+    and not video_candidate
     and not string.match(lower_url .. "?", "^https?://video%.sina%.com%.cn/share/video/[0-9]+%.swf%?") then
     retry_url = true
     return false
   end
   if context["media_urls"][lower_url]
     and status_code == 200
+    and http_stat["len"] > 0
     and not string.match(content_type, "^application/json")
     and not string.match(content_type, "^text/") then
     if headers["x-filesize"] and http_stat["len"] ~= tonumber(headers["x-filesize"][1]) then
@@ -719,8 +723,7 @@ wget.callbacks.write_to_warc = function(url, http_stat)
       error("File does not match etag.")
     end
     context["digests"][url["url"]] = "sha1:" .. basexx.to_base32(sha1:final())
-    local video_file_id, extension = string.match(lower_url, "^https://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.([a-z0-9]+)$")
-    if video_file_id and (extension == "flv" or extension == "hlv" or extension == "mp4") then
+    if video_candidate then
       context["video_files"][video_file_id] = true
     end
   end
