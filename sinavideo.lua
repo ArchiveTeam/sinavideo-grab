@@ -360,12 +360,12 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     check("https://video.sina.com.cn/api/sinawebApi/outplayrefer.php/vid=" .. file_id .. "/s.swf")
     if extension == "flv" or extension == "hlv" or extension == "mp4" then
       for _, base_url in pairs({
-        "https://sinacloud.net/s3.ivideo.sina.com.cn/",
-        "https://cdn.sinacloud.net/edge.v.iask.com/",
-        "https://sinacloud.net/edge.v.iask.com/",
-        "https://cdn.sinacloud.net/edge.ivideo.sina.com.cn/",
-        "https://sinacloud.net/edge.ivideo.sina.com.cn/",
-        "http://s3.sinaapp.com/edge.v.iask.com/",
+        -- "https://sinacloud.net/s3.ivideo.sina.com.cn/",
+        -- "https://cdn.sinacloud.net/edge.v.iask.com/",
+        -- "https://sinacloud.net/edge.v.iask.com/",
+        -- "https://cdn.sinacloud.net/edge.ivideo.sina.com.cn/",
+        -- "https://sinacloud.net/edge.ivideo.sina.com.cn/",
+        -- "http://s3.sinaapp.com/edge.v.iask.com/",
       }) do
         check_media(base_url .. file_id .. "." .. extension)
       end
