@@ -32,6 +32,7 @@ local context = {}
 
 local item_patterns = {
   ["^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?.*video_id=([0-9]+)"] = "video",
+  ["^https?://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.[a-z0-9]+$"] = "file",
   ["^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?.*vid=([0-9]+)"] = "vid",
 }
 
@@ -110,7 +111,7 @@ set_item = function(url)
     local new_item_type = found["type"]
     local new_item_value = found["value"]
     local new_item_name = new_item_type .. ":" .. new_item_value
-    if new_item_type == "vid" and ids[new_item_value] then
+    if ids[new_item_value] then
       return nil
     end
     if new_item_name ~= item_name then
@@ -149,7 +150,7 @@ allowed = function(url)
   local found = find_item(url)
   if found then
     local new_item = found["type"] .. ":" .. found["value"]
-    if found["type"] == "vid" and ids[found["value"]] then
+    if ids[found["value"]] then
       return true
     end
     if new_item ~= item_name then
@@ -346,9 +347,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     end
     discover_item(discovered_items, "vid:" .. file_id)
     ids[file_id] = true
-    if context["video_files"][file_id] == nil then
-      context["video_files"][file_id] = false
-    end
+    context["video_files"][file_id] = context["video_files"][file_id] or {}
     check("https://s.video.sina.com.cn/video/getvideoidbyvid?vid=" .. file_id)
     check("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc")
     check_media("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&direct=1")
@@ -475,6 +474,12 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     end
   end
 
+  if item_type == "file" then
+    for _, candidate in pairs({"flv", "hlv", "mp4"}) do
+      check_media("https://s3.ivideo.sina.com.cn/" .. item_value .. "." .. candidate)
+    end
+  end
+
   if allowed(url) and status_code < 300 then
     if string.match(url, "^https?://cmnt%.sina%.cn/aj/v2/list%?.-&group=0&thread=1&page=1&hot=1$") then
       json = cjson.decode(read_file(file))
@@ -531,7 +536,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     end
     if item_type == "vid" or video_metadata or video_playback then
       if json["code"] == 0 then
-        if item_type == "vid" or video_metadata then
+        if item_type ~= "vid" and video_metadata then
           abort_item()
         end
         return urls
@@ -539,11 +544,23 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
         error("Bad video API data.")
       end
     end
-    if item_type == "vid" then
-      discover_item(discovered_items, "video:" .. json["data"]["video_id"])
+    if item_type == "vid" and not video_metadata then
+      local video_id = tostring(json["data"]["video_id"])
+      ids[video_id] = true
+      check("https://api.ivideo.sina.com.cn/public/video/info?video_id=" .. video_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc")
       return urls
     end
     if video_metadata then
+      if item_type == "vid" then
+        discover_item(discovered_items, "video:" .. tostring(json["data"]["video_id"]))
+        for _, video in pairs(json["data"]["videos"]) do
+          if tostring(video["file_id"]) == item_value then
+            context["video_has_file"] = true
+            break
+          end
+        end
+        return urls
+      end
       if tostring(json["data"]["video_id"]) ~= item_value then
         error("Inconsistent video metadata.")
       end
@@ -560,7 +577,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     elseif json then
       scan_json(json)
     end
-    if context["media_urls"][string.lower(url)] then
+    if item_type ~= "file" and context["media_urls"][string.lower(url)] then
       add_file(find_media(url))
     end
     if html then
@@ -662,12 +679,40 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   local lower_url = string.lower(url["url"])
   local video_file_id, extension = string.match(lower_url, "^https://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.([a-z0-9]+)$")
   local video_candidate = video_file_id and (extension == "flv" or extension == "hlv" or extension == "mp4")
+  if item_type == "file" and video_candidate then
+    context["media_urls"][lower_url] = true
+    context["video_files"][video_file_id] = context["video_files"][video_file_id] or {}
+  end
+  if video_candidate and status_code == 404 then
+    local file_data = context["video_files"][video_file_id]
+    if file_data[extension] == nil then
+      local _, code = https.request({
+        ["url"]=url["url"],
+        ["method"]="HEAD",
+        ["redirect"]=false
+      })
+      if code == 404 then
+        io.stdout:write("File confirmed to not exist.\n")
+        io.stdout:flush()
+        file_data[extension] = true
+      elseif code == 200 then
+        file_data[extension] = false
+      end
+    end
+    if file_data[extension] ~= true then
+      io.stdout:write("File should exist, retrying. \n")
+      io.stdout:flush()
+      retry_url = true
+      return false
+    end
+  end
   if not (
     status_code == 200
     or (
-      not (
-        string.match(lower_url, "^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?")
-        or string.match(lower_url, "^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?")
+      not string.match(lower_url, "^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?")
+      and (
+        item_type == "vid"
+        or not string.match(lower_url, "^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?")
       )
       and (
         (status_code >= 300 and status_code <= 399)
@@ -724,7 +769,7 @@ wget.callbacks.write_to_warc = function(url, http_stat)
     end
     context["digests"][url["url"]] = "sha1:" .. basexx.to_base32(sha1:final())
     if video_candidate then
-      context["video_files"][video_file_id] = true
+      context["video_files"][video_file_id]["archived"] = true
     end
   end
   if abortgrab then
@@ -787,12 +832,16 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
     io.stdout:flush()
     tries = tries + 1
     local maxtries = 5
+    if status_code == 404
+      and string.match(lower_url, "^https://s3%.ivideo%.sina%.com%.cn/[0-9]+%.[a-z0-9]+$") then
+      maxtries = 10
+    end
     if tries > maxtries then
       io.stdout:write(" Skipping.\n")
       io.stdout:flush()
       tries = 0
       abort_item()
-      return wget.actions.EXIT
+      return wget.actions.ABORT --return wget.actions.EXIT
     end
     local sleep_time = math.random(
       math.floor(math.pow(2, tries-0.5)),
@@ -826,11 +875,16 @@ wget.callbacks.finish = function(start_time, end_time, wall_time, numurls, total
     if next(context["video_files"]) == nil then
       abort_item()
     end
-    for file_id, archived in pairs(context["video_files"]) do
-      if not archived then
+    for file_id, file_data in pairs(context["video_files"]) do
+      if not file_data["archived"]
+        and not (file_data["flv"] and file_data["hlv"] and file_data["mp4"]) then
         error("No video archived for vid " .. file_id .. ".")
       end
     end
+  elseif item_type == "vid"
+    and not abortgrab
+    and not context["video_has_file"] then
+    discover_item(discovered_items, "file:" .. item_value)
   end
 
   local function submit_backfeed(items, key)
