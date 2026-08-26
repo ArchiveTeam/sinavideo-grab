@@ -695,6 +695,31 @@ wget.callbacks.write_to_warc = function(url, http_stat)
         io.stdout:write("File confirmed to not exist.\n")
         io.stdout:flush()
         file_data[extension] = true
+        if file_data["flv"]
+          and file_data["hlv"]
+          and file_data["mp4"] then
+          for _, base_url in pairs({
+            "https://sinacloud.net/edge.v.iask.com/",
+            "https://sinacloud.net/edge.ivideo.sina.com.cn/",
+            "https://cdn.sinacloud.net/edge.v.iask.com/",
+            "https://cdn.sinacloud.net/edge.ivideo.sina.com.cn/",
+          }) do
+            for _, candidate in pairs({"flv", "hlv", "mp4"}) do
+              local url2 = base_url .. video_file_id .. "." .. candidate
+              local _, code2 = https.request({
+                ["url"]=url2,
+                ["method"]="HEAD",
+                ["redirect"]=false
+              })
+              if code2 == 200 then
+                io.stdout:write("File found at " .. url2 .. ".\n")
+                io.stdout:flush()
+                abort_item()
+                return false
+              end
+            end
+          end
+        end
       elseif code == 200 then
         file_data[extension] = false
       end
