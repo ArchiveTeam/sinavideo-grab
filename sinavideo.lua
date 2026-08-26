@@ -553,16 +553,25 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     if video_metadata then
       if item_type == "vid" then
         discover_item(discovered_items, "video:" .. tostring(json["data"]["video_id"]))
-        for _, video in pairs(json["data"]["videos"]) do
+      elseif tostring(json["data"]["video_id"]) ~= item_value then
+        error("Inconsistent video metadata.")
+      end
+      for _, video in pairs(json["data"]["videos"]) do
+        if item_type == "vid" then
           if tostring(video["file_id"]) == item_value then
             context["video_has_file"] = true
             break
           end
+        elseif type(video["dispatch_result"]) == "table"
+          and string.match(string.lower(video["dispatch_result"]["url"]), "^https?://[^/]*weibocdn%.com/") then
+          io.stdout:write("Video found on weibocdn.\n")
+          io.stdout:flush()
+          abort_item()
+          return urls
         end
-        return urls
       end
-      if tostring(json["data"]["video_id"]) ~= item_value then
-        error("Inconsistent video metadata.")
+      if item_type == "vid" then
+        return urls
       end
       check("https://api.ivideo.sina.com.cn/public/video/play?video_id=" .. item_value .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&player=all")
       check("https://s.video.sina.com.cn/video/play?video_id=" .. item_value)
