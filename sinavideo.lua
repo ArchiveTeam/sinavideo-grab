@@ -692,11 +692,15 @@ wget.callbacks.write_to_warc = function(url, http_stat)
     context["media_urls"][lower_url] = true
     context["video_files"][video_file_id] = context["video_files"][video_file_id] or {}
   end
-  if video_candidate and status_code == 404 then
+  if not video_candidate and context["media_urls"][lower_url] then
+    video_file_id = string.match(lower_url .. "?", "/([0-9]+)%.[a-z0-9]+%?")
+    extension = lower_url
+  end
+  if video_file_id and status_code == 404 then
     local file_data = context["video_files"][video_file_id]
     if file_data[extension] == nil then
       local _, code = https.request({
-        ["url"]=url["url"],
+        ["url"]=string.gsub(url["url"], "^http:", "https:"),
         ["method"]="HEAD",
         ["redirect"]=false
       })
@@ -704,7 +708,8 @@ wget.callbacks.write_to_warc = function(url, http_stat)
         io.stdout:write("File confirmed to not exist.\n")
         io.stdout:flush()
         file_data[extension] = true
-        if file_data["flv"]
+        if video_candidate
+          and file_data["flv"]
           and file_data["hlv"]
           and file_data["mp4"] then
           for _, base_url in pairs({
@@ -867,7 +872,7 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
     tries = tries + 1
     local maxtries = 5
     if status_code == 404
-      and string.match(lower_url, "^https://s3%.ivideo%.sina%.com%.cn/[0-9]+%.[a-z0-9]+$") then
+      and string.match(lower_url .. "?", "/[0-9]+%.[a-z0-9]+%?") then
       maxtries = 10
     end
     if tries > maxtries then
