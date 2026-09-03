@@ -26,6 +26,7 @@ local discovered_outlinks = {}
 local discovered_items = {}
 local bad_items = {}
 local ids = {}
+local ignored_files = {}
 
 local retry_url = false
 local context = {}
@@ -125,6 +126,7 @@ set_item = function(url)
       item_value = new_item_value
       item_type = new_item_type
       ids[item_value] = true
+      ignored_files = {}
       abortgrab = false
       tries = 0
       retry_url = false
@@ -345,6 +347,9 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     if not string.match(file_id, "^[0-9]+$") then
       return nil
     end
+    if ignored_files[file_id] then
+      return nil
+    end
     discover_item(discovered_items, "vid:" .. file_id)
     ids[file_id] = true
     context["video_files"][file_id] = context["video_files"][file_id] or {}
@@ -392,8 +397,64 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     addedtolist[original_url] = true
   end
 
+  local groups = {}
+
+  local function find_videos(data)
+    if type(data) ~= "table" then
+      return nil
+    end
+    local file_id = tostring(data["file_id"])
+    local width = tonumber(data["width"])
+    local height = tonumber(data["height"])
+    local size = tonumber(data["size"])
+    if string.match(file_id, "^[0-9]+$")
+      and width and width > 0
+      and height and height > 0
+      and size and size > 0 then
+      local key = string.lower(data["codec"] .. "\0" .. data["type"] .. "\0" .. data["length"])
+      local pixels = width * height
+      local group = groups[key]
+      if not group
+        or pixels > group["pixels"]
+        or (pixels == group["pixels"] and size > group["size"]) then
+        if group then
+          for file_id in pairs(group["files"]) do
+            ignored_files[file_id] = true
+          end
+        end
+        groups[key] = {
+          ["files"]={[file_id]=true},
+          ["pixels"]=pixels,
+          ["size"]=size
+        }
+      elseif pixels < group["pixels"]
+        or (pixels == group["pixels"] and size < group["size"]) then
+        ignored_files[file_id] = true
+      else
+        group["files"][file_id] = true
+      end
+    end
+    for _, child in pairs(data) do
+      find_videos(child)
+    end
+  end
+
   local function scan_json(value, key, media_data, item_data)
+    if media_data and key == nil then
+      find_videos(value)
+    end
     if type(value) == "table" then
+      if ignored_files[tostring(value["file_id"])] then
+        return nil
+      end
+      if media_data
+        and type(value["dispatch_result"]) == "table"
+        and string.match(string.lower(value["dispatch_result"]["url"]), "^https?://[^/]*weibocdn%.com/") then
+        io.stdout:write("Video found on weibocdn.\n")
+        io.stdout:flush()
+        abort_item()
+        return nil
+      end
       if media_data then
         add_file(value["file_id"], value["type"])
         add_file(value["vid"])
@@ -556,21 +617,13 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       elseif tostring(json["data"]["video_id"]) ~= item_value then
         error("Inconsistent video metadata.")
       end
-      for _, video in pairs(json["data"]["videos"]) do
-        if item_type == "vid" then
+      if item_type == "vid" then
+        for _, video in pairs(json["data"]["videos"]) do
           if tostring(video["file_id"]) == item_value then
             context["video_has_file"] = true
             break
           end
-        elseif type(video["dispatch_result"]) == "table"
-          and string.match(string.lower(video["dispatch_result"]["url"]), "^https?://[^/]*weibocdn%.com/") then
-          io.stdout:write("Video found on weibocdn.\n")
-          io.stdout:flush()
-          abort_item()
-          return urls
         end
-      end
-      if item_type == "vid" then
         return urls
       end
       check("https://api.ivideo.sina.com.cn/public/video/play?video_id=" .. item_value .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&player=all")
