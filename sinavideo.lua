@@ -380,7 +380,10 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
   end
 
   local function check_page(newurl)
-    newurl = string.match(newurl, "^([^#]+)")
+    newurl = newurl and string.match(newurl, "^([^#]+)")
+    if not newurl then
+      return nil
+    end
     local original_url = newurl
     if string.match(newurl, "^http://video%.sina%.com%.cn/")
       or string.match(newurl, "^http://video%.sina%.cn/") then
@@ -544,9 +547,6 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
   if allowed(url) and status_code < 300 then
     if string.match(url, "^https?://cmnt%.sina%.cn/aj/v2/list%?.-&group=0&thread=1&page=1&hot=1$") then
       json = cjson.decode(read_file(file))
-      if json["status"] ~= 1 then
-        error("Bad comment data.")
-      end
       scan_json(json["data"], nil, false, true)
       return urls
     end
@@ -824,6 +824,30 @@ wget.callbacks.write_to_warc = function(url, http_stat)
     and not string.match(lower_url .. "?", "^https?://video%.sina%.com%.cn/share/video/[0-9]+%.swf%?") then
     retry_url = true
     return false
+  end
+  if status_code == 200 then
+    for _, check in ipairs({
+      {"^https?://comment5%.news%.sina%.com%.cn/page/info%?", {"result", "status", "code"}, 0},
+      {"^https?://cmnt%.sina%.cn/aj/v2/list%?.-&group=0&thread=1&page=1&hot=1$", {"status"}, 1},
+      {"^https?://cmnt%.sina%.cn/aj/v2/list%?", {"result", "status", "code"}, 0},
+      {"^https?://cre%.mix%.sina%.com%.cn/api/v3/get%?", {"status", "code"}, 0},
+    }) do
+      if string.match(lower_url, check[1]) then
+        local value = cjson.decode(read_file(http_stat["local_file"]))
+        for _, key in ipairs(check[2]) do
+          if type(value) == "table" then
+            value = value[key]
+          else
+            value = nil
+          end
+        end
+        if value ~= check[3] then
+          retry_url = true
+          return false
+        end
+        break
+      end
+    end
   end
   if context["media_urls"][lower_url]
     and status_code == 200
