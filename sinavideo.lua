@@ -354,7 +354,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     check_media("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id)
     check("https://video.sina.com.cn/interface/video_ids/video_ids.php?v=" .. file_id)
     check("https://interface.sina.cn/video/wap/videoinfo.d.json?vid=" .. file_id)
-    check_media("https://newsapi.sina.cn/?resource=video/location&videoPlayUrl=" .. urlparse.escape("http://ask.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id))
+    check_media("https://newsapi.sina.cn/?resource=video/location&videoPlayUrl=" .. urlparse.escape("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id))
     check("https://video.sina.com.cn/api/outPlayRefer.php/vid=" .. file_id .. "/s.swf")
     check("https://video.sina.com.cn/api/sinawebApi/outplayrefer.php/vid=" .. file_id .. "/s.swf")
     if extension == "flv" or extension == "hlv" or extension == "mp4" then
@@ -693,14 +693,13 @@ wget.callbacks.write_to_warc = function(url, http_stat)
     context["video_files"][video_file_id] = context["video_files"][video_file_id] or {}
   end
   if not video_candidate and context["media_urls"][lower_url] then
-    video_file_id = string.match(lower_url .. "?", "/([0-9]+)%.[a-z0-9]+%?")
-    extension = lower_url
+    video_file_id, extension = string.match(lower_url .. "?", "/([0-9]+)%.([a-z0-9]+)%?")
   end
   if video_file_id and status_code == 404 then
     local file_data = context["video_files"][video_file_id]
     if file_data[extension] == nil then
       local _, code = https.request({
-        ["url"]=string.gsub(url["url"], "^http:", "https:"),
+        ["url"]="https://s3.ivideo.sina.com.cn/" .. video_file_id .. "." .. extension,
         ["method"]="HEAD",
         ["redirect"]=false
       })
