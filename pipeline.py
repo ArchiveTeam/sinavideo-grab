@@ -71,7 +71,7 @@ if not WGET_AT:
 #
 # Update this each time you make a non-cosmetic change.
 # It will be added to the WARC files and reported to the tracker.
-VERSION = '20260903.03'
+VERSION = '20260905.01'
 TRACKER_ID = 'sinavideo'
 TRACKER_HOST = 'legacy-api.arpa.li'
 MULTI_ITEM_SIZE = 1 # KEEP ONE
@@ -358,7 +358,7 @@ class WgetArgs(object):
             '--warc-dedup-url-agnostic',
             '--impersonate', 'firefox148-h1',
             '--header', 'Accept-Encoding: identity',
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0'
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:155.0) Gecko/20100101 Firefox/155.0'
         ]
 
         if '--concurrent' in sys.argv:
