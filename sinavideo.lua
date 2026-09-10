@@ -24,6 +24,7 @@ local content_type = ""
 
 local discovered_outlinks = {}
 local discovered_items = {}
+local discovered_swfs = {}
 local bad_items = {}
 local ids = {}
 local ignored_files = {}
@@ -35,6 +36,9 @@ local item_patterns = {
   ["^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?.*video_id=([0-9]+)"] = "video",
   ["^https?://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.[a-z0-9]+$"] = "file",
   ["^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?.*vid=([0-9]+)"] = "vid",
+  ["^https?://[^%?]+/vid=([0-9]+)[^%?]*%.swf"] = "swf-vid",
+  ["^https?://[^%?]+%.swf%?.-vid=([0-9]+)"] = "swf-vid",
+  ["^https?://[^/%?]+/share/video/([0-9]+)%.swf"] = "swf-video",
 }
 
 abort_item = function(item)
@@ -141,17 +145,23 @@ allowed = function(url)
   if string.match(lower, "^https?://ask%.ivideo%.sina%.com%.cn[/%?:]") then
     return false
   end
-  if ids[lower] then
-    return true
+  local swf = string.match(lower .. "?", "^https?://[^%?]+%.swf%?")
+  if not swf then
+    if ids[lower] then
+      return true
+    end
+    if context["media_urls"][lower] then
+      return true
+    end
   end
 
-  if context["media_urls"][lower] then
-    return true
-  end
-
-  local found = find_item(url)
+  local found = find_item(lower)
   if found then
     local new_item = found["type"] .. ":" .. found["value"]
+    if string.match(found["type"], "^swf%-") then
+      discover_item(discovered_swfs, new_item)
+      return false
+    end
     if ids[found["value"]] then
       return true
     end
@@ -160,6 +170,9 @@ allowed = function(url)
       return false
     end
     return true
+  end
+  if swf then
+    error("No item found for SWF " .. url .. ".")
   end
 
   if not (
@@ -820,8 +833,7 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   end
   if http_stat["len"] == 0
     and status_code == 200
-    and not video_candidate
-    and not string.match(lower_url .. "?", "^https?://video%.sina%.com%.cn/share/video/[0-9]+%.swf%?") then
+    and not video_candidate then
     retry_url = true
     return false
   end
@@ -1034,6 +1046,7 @@ wget.callbacks.finish = function(start_time, end_time, wall_time, numurls, total
   file:close()
   for key, data in pairs({
     ["sinavideo-4xm1495fhdoztgvi"] = discovered_items,
+    ["sinavideo-stash-swf-e92dea523fcb1ad3"] = discovered_swfs,
     ["urls-argjgz5xgat69puw"] = discovered_outlinks
   }) do
     print("queuing for", string.match(key, "^(.+)%-"))
