@@ -947,11 +947,27 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
     io.stdout:flush()
     tries = tries + 1
     local maxtries = 5
-    if status_code == 404
+    if status_code == 418 then
+      for _, pattern in pairs({
+        "^https?://video%.sina%.com%.cn/api/outplayrefer%.php/vid=[0-9]+/s%.swf%?",
+        "^https?://video%.sina%.com%.cn/api/sinawebapi/outplayrefer%.php/vid=[0-9]+/s%.swf%?",
+        "^https?://video%.sina%.com%.cn/share/video/[0-9]+%.swf%?",
+        "^https?://video%.sina%.com%.cn/api/getvideoinfo%.php%?url=https?://video%.sina%.com%.cn/view/[0-9]+%.html[%?&]",
+        "^https?://video%.sina%.com%.cn/interface/video_ids/video_ids%.php%?v=[0-9]+[%?&]",
+      }) do
+        if string.match(urlparse.unescape(lower_url) .. "?", pattern) then
+          maxtries = 2
+          break
+        end
+      end
+    elseif status_code == 404
       and string.match(lower_url .. "?", "/[0-9]+%.[a-z0-9]+%?") then
       maxtries = 10
     end
     if tries > maxtries then
+      if maxtries == 2 then
+        error("Server returned 418.")
+      end
       io.stdout:write(" Skipping.\n")
       io.stdout:flush()
       tries = 0
