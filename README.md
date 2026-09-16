@@ -1,6 +1,6 @@
 # sinavideo-grab
 
-More information about the archiving project can be found on the ArchiveTeam wiki: [Sina Video](https://wiki.archiveteam.org/index.php?title=Sina Video)
+More information about the archiving project can be found on the ArchiveTeam wiki: [Sina Video](https://wiki.archiveteam.org/index.php?title=Sina_Video)
 
 ## Donations
 
@@ -33,9 +33,9 @@ This and other archiving projects can easily be run using the [Archive Team Warr
 
 Alternatively, more advanced users can also run projects using Docker. While users of the Warrior can switch between projects using a web interface, Docker containers are specific to each project. However, while the Warrior supports a maximum of 6 concurrent items, a Docker container supports a maximum of 20 concurrent items. The instructions below are a short overview. For more information and detailed explanations of the commands, follow the follow the [Docker instructions on the Archive Team wiki](https://wiki.archiveteam.org/index.php/Running_Archive_Team_Projects_with_Docker).
 
-It is advised to use [Watchtower](https://github.com/containrrr/watchtower) to automatically update the project container:
+It is advised to use [Watchtower](https://github.com/nicholas-fedor/watchtower) to automatically update the project container:
 
-    docker run -d --name watchtower --restart=unless-stopped -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --label-enable --cleanup --interval 3600 --include-restarting
+    docker run -d --name watchtower --restart=unless-stopped -v /var/run/docker.sock:/var/run/docker.sock nickfedor/watchtower --label-enable --cleanup --interval 3600 --include-restarting
 
 after which the project container can be run:
 
@@ -52,5 +52,3 @@ Are you a developer? Help write code for us! Look at our [developer documentatio
 ### Other problems
 
 Have an issue not listed here? Join us on IRC and ask! We can be found at hackint IRC [#sinavapour](https://chat.hackint.org/?join=%23sinavapour).
-
-
