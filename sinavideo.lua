@@ -354,12 +354,12 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     ids[file_id] = true
     context["video_files"][file_id] = context["video_files"][file_id] or {}
     check("https://s.video.sina.com.cn/video/getvideoidbyvid?vid=" .. file_id)
-    check("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc")
-    check_media("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&direct=1")
-    check_media("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id)
+    check("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&video_id=" .. item_value)
+    check_media("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&video_id=" .. item_value .. "&direct=1")
+    check_media("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id .. "&video_id=" .. item_value)
     check("https://video.sina.com.cn/interface/video_ids/video_ids.php?v=" .. file_id)
     check("https://interface.sina.cn/video/wap/videoinfo.d.json?vid=" .. file_id)
-    check_media("https://newsapi.sina.cn/?resource=video/location&videoPlayUrl=" .. urlparse.escape("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id))
+    check_media("https://newsapi.sina.cn/?resource=video/location&videoPlayUrl=" .. urlparse.escape("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id .. "&video_id=" .. item_value))
     check("https://video.sina.com.cn/api/outPlayRefer.php/vid=" .. file_id .. "/s.swf")
     check("https://video.sina.com.cn/api/sinawebApi/outplayrefer.php/vid=" .. file_id .. "/s.swf")
     if extension == "flv" or extension == "hlv" or extension == "mp4" then
