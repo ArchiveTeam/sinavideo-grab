@@ -72,7 +72,7 @@ if not WGET_AT:
 #
 # Update this each time you make a non-cosmetic change.
 # It will be added to the WARC files and reported to the tracker.
-VERSION = '20260917.01'
+VERSION = '20260919.01'
 TRACKER_ID = 'sinavideo'
 TRACKER_HOST = 'legacy-api.arpa.li'
 MULTI_ITEM_SIZE = 1 # KEEP ONE
@@ -155,11 +155,13 @@ class CheckIntegrity(SimpleTask):
         total = 0
         chunksize = 1024 ** 2
         with gzip.open('%(item_dir)s/%(warc_file_base)s.warc.gz' % item, 'rb') as f:
+            d = f.readline()
             while True:
-                start = f.tell()
-                d = b''
                 while b'\r\n\r\n' not in d:
-                    d += f.read(chunksize)
+                    chunk = f.readline()
+                    if not chunk:
+                        raise Exception('Incomplete WARC headers.')
+                    d += chunk
                 warc_headers_raw = d.split(b'\r\n\r\n', 1)[0]
                 warc_headers = {}
                 for header in warc_headers_raw.split(b'\r\n'):
@@ -167,8 +169,6 @@ class CheckIntegrity(SimpleTask):
                         continue
                     k, v = header.split(b': ', 1)
                     warc_headers[str(k, 'utf8')] = v
-                f.seek(start+len(warc_headers_raw)+4)
-                content_start = f.tell()
                 item.log_output('Checking {} {}.'.format(
                     str(warc_headers['WARC-Type'], 'utf8'),
                     str(warc_headers['WARC-Record-ID'], 'utf8')
@@ -183,52 +183,73 @@ class CheckIntegrity(SimpleTask):
                 payload_digest = None
                 data = b''
                 chunked = False
+                length = None
                 content_length = int(warc_headers['Content-Length'])
                 for i in range(0, content_length, chunksize):
                     d = f.read(min(chunksize, content_length-i))
+                    if len(d) != min(chunksize, content_length-i):
+                        raise Exception('Incomplete WARC record.')
                     if has_payload:
                         if payload_digest is None:
                             data += d
                             if b'\r\n\r\n' in data:
-                                http_headers_raw, payload = data.split(b'\r\n\r\n', 1)
-                                payload_start = content_start+len(http_headers_raw)+4
+                                http_headers_raw, data = data.split(b'\r\n\r\n', 1)
                                 payload_digest = hashlib.sha1()
                                 if b'transfer-encoding: ' in http_headers_raw.lower():
                                     chunked = b'transfer-encoding: chunked' in http_headers_raw.lower()
                                     has_payload = chunked
                                 if not chunked:
-                                    payload_digest.update(payload)
-                        elif not chunked:
+                                    payload_digest.update(data)
+                                    data = b''
+                        elif chunked:
+                            data += d
+                        else:
                             payload_digest.update(d)
+                        if chunked:
+                            while length != -1:
+                                if length is None:
+                                    if b'\r\n' not in data:
+                                        break
+                                    line, data = data.split(b'\r\n', 1)
+                                    length = int(line.split(b';', 1)[0], 16)
+                                    if length < 0:
+                                        raise Exception('Invalid chunked payload.')
+                                    if length == 0:
+                                        length = -1
+                                        break
+                                if length > 0:
+                                    chunk = data[:length]
+                                    payload_digest.update(chunk)
+                                    length -= len(chunk)
+                                    data = data[len(chunk):]
+                                    if length > 0:
+                                        break
+                                if len(data) < 2:
+                                    break
+                                if data[:2] != b'\r\n':
+                                    raise Exception('Invalid chunked payload.')
+                                data = data[2:]
+                                length = None
+                            if length == -1:
+                                data = b''
                     block_digest.update(d)
                 block_digest = b'sha1:' + base64.b32encode(block_digest.digest())
                 if block_digest != warc_headers['WARC-Block-Digest']:
                     raise Exception('Block digests do not match. Got {}, expected {}.'
                                     .format(block_digest, warc_headers['WARC-Block-Digest']))
-                if chunked:
-                    position = f.tell()
-                    f.seek(payload_start)
-                    while True:
-                        length = int(f.readline().split(b';', 1)[0], 16)
-                        if length == 0:
-                            break
-                        while length > 0:
-                            d = f.read(min(chunksize, length))
-                            payload_digest.update(d)
-                            length -= len(d)
-                        if f.read(2) != b'\r\n':
-                            raise Exception('Invalid chunked payload.')
-                    f.seek(position)
+                if chunked and length != -1:
+                    raise Exception('Incomplete chunked payload.')
                 if has_payload:
                     payload_digest = b'sha1:' + base64.b32encode(payload_digest.digest())
                     if payload_digest != warc_headers['WARC-Payload-Digest']:
                         raise Exception('Payload digests do not match. Got {}, expected {}.'
                                         .format(payload_digest, warc_headers['WARC-Payload-Digest']))
                     seen_digests.add(payload_digest)
-                f.seek(4, 1)
-                if len(f.read(1)) == 0:
+                if f.read(4) != b'\r\n\r\n':
+                    raise Exception('Invalid WARC separator.')
+                d = f.readline()
+                if not d:
                     break
-                f.seek(-1, 1)
 
 
 class MoveFiles(SimpleTask):
