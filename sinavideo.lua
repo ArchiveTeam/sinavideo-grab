@@ -34,7 +34,7 @@ local context = {}
 local item_patterns = {
   ["^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?.*video_id=([0-9]+)"] = "video",
   ["^https?://s3%.ivideo%.sina%.com%.cn/([0-9]+)%.[a-z0-9]+$"] = "file",
-  ["^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?.*vid=([0-9]+)"] = "vid",
+  ["^https?://s%.video%.sina%.com%.cn/[Vv]ideo/getvideoidbyvid%?.*vid=([0-9]+)"] = "vid",
 }
 
 abort_item = function(item)
@@ -353,7 +353,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     discover_item(discovered_items, "vid:" .. file_id)
     ids[file_id] = true
     context["video_files"][file_id] = context["video_files"][file_id] or {}
-    check("https://s.video.sina.com.cn/video/getvideoidbyvid?vid=" .. file_id)
+    check("https://s.video.sina.com.cn/Video/getvideoidbyvid?vid=" .. file_id)
     check("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&video_id=" .. item_value)
     check_media("https://api.ivideo.sina.com.cn/public/video/play/url?vid=" .. file_id .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&video_id=" .. item_value .. "&direct=1")
     check_media("https://api.ivideo.sina.com.cn/v_play_ipad.php?vid=" .. file_id .. "&video_id=" .. item_value)
@@ -570,7 +570,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       scan_json(json, nil, false, true)
       return urls
     end
-    if string.match(url, "^https?://s%.video%.sina%.com%.cn/video/play%?")
+    if string.match(url, "^https?://s%.video%.sina%.com%.cn/[Vv]ideo/play%?")
       or string.match(url, "^https?://s%.video%.sina%.com%.cn/video/h5play%?")
       or string.match(url, "^https?://interface%.sina%.cn/video/wap/videoinfo%.d%.json%?")
       or string.match(url, "^https?://interface%.sina%.cn/video/wap/get_videoinfo%.d%.json%?")
@@ -583,7 +583,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     local video_metadata = string.match(url, "^https?://api%.ivideo%.sina%.com%.cn/public/video/info%?")
     local video_playback = string.match(url, "^https?://api%.ivideo%.sina%.com%.cn/public/video/play%?")
     if item_type == "vid"
-      or string.match(url, "^https?://s%.video%.sina%.com%.cn/video/getvideoidbyvid%?")
+      or string.match(url, "^https?://s%.video%.sina%.com%.cn/[Vv]ideo/getvideoidbyvid%?")
       or video_metadata
       or video_playback then
       json = cjson.decode(read_file(file))
@@ -627,7 +627,7 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
         return urls
       end
       check("https://api.ivideo.sina.com.cn/public/video/play?video_id=" .. item_value .. "&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc&player=all")
-      check("https://s.video.sina.com.cn/video/play?video_id=" .. item_value)
+      check("https://s.video.sina.com.cn/Video/play?video_id=" .. item_value)
       check("https://s.video.sina.com.cn/video/h5play?video_id=" .. item_value)
       check("https://interface.sina.cn/video/wap/videoinfo.d.json?vid=" .. item_value)
       scan_json(json["data"], nil, true)

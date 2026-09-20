@@ -72,7 +72,7 @@ if not WGET_AT:
 #
 # Update this each time you make a non-cosmetic change.
 # It will be added to the WARC files and reported to the tracker.
-VERSION = '20260919.01'
+VERSION = '20260920.01'
 TRACKER_ID = 'sinavideo'
 TRACKER_HOST = 'legacy-api.arpa.li'
 MULTI_ITEM_SIZE = 1 # KEEP ONE
@@ -402,7 +402,7 @@ class WgetArgs(object):
                 wget_args.append('https://api.ivideo.sina.com.cn/public/video/info?video_id={}&appname=sinaplayer_pc&appver=V11220.210521.03&applt=web&tags=sinaplayer_pc'.format(item_value))
             elif item_type == 'vid':
                 wget_args.extend(['--warc-header', 'sinavideo-vid: '+item_value])
-                wget_args.append('https://s.video.sina.com.cn/video/getvideoidbyvid?vid={}'.format(item_value))
+                wget_args.append('https://s.video.sina.com.cn/Video/getvideoidbyvid?vid={}'.format(item_value))
             elif item_type == 'file':
                 wget_args.extend(['--warc-header', 'sinavideo-file: '+item_value])
                 wget_args.append('https://s3.ivideo.sina.com.cn/{}.flv'.format(item_value))
