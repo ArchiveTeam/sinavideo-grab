@@ -955,7 +955,7 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
         "^https?://video%.sina%.com%.cn/api/getvideoinfo%.php%?url=https?://video%.sina%.com%.cn/view/[0-9]+%.html[%?&]",
         "^https?://video%.sina%.com%.cn/interface/video_ids/video_ids%.php%?v=[0-9]+[%?&]",
       }) do
-        if string.match(lower_url .. "?", pattern) then
+        if string.match(string.lower(urlparse.unescape(lower_url)) .. "?", pattern) then
           io.stdout:write(" Skipping.\n")
           io.stdout:flush()
           return wget.actions.EXIT
