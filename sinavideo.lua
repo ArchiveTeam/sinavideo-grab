@@ -777,8 +777,8 @@ wget.callbacks.write_to_warc = function(url, http_stat)
                 ["method"]="HEAD",
                 ["redirect"]=false
               })
-              if code2 == 200 then
-                io.stdout:write("File found at " .. url2 .. ".\n")
+              if code2 ~= 404 then
+                io.stdout:write("File may not be missing at " .. url2 .. " with " .. tostring(code2) .. ".\n")
                 io.stdout:flush()
                 abort_item()
                 return false
