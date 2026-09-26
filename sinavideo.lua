@@ -754,14 +754,16 @@ wget.callbacks.write_to_warc = function(url, http_stat)
       local _, code = https.request({
         ["url"]="https://s3.ivideo.sina.com.cn/" .. video_file_id .. "." .. extension,
         ["method"]="HEAD",
+        ["headers"]={
+          ["user-agent"]="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0"
+        },
         ["redirect"]=false
       })
       if code == 404 then
         io.stdout:write("File confirmed to not exist.\n")
         io.stdout:flush()
         file_data[extension] = true
-        if video_candidate
-          and file_data["flv"]
+        if file_data["flv"]
           and file_data["hlv"]
           and file_data["mp4"] then
           for _, base_url in pairs({
@@ -775,6 +777,9 @@ wget.callbacks.write_to_warc = function(url, http_stat)
               local _, code2 = https.request({
                 ["url"]=url2,
                 ["method"]="HEAD",
+                ["headers"]={
+                  ["user-agent"]="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0"
+                },
                 ["redirect"]=false
               })
               if code2 ~= 404 then
