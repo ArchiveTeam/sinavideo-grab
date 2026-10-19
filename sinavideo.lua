@@ -823,12 +823,25 @@ wget.callbacks.write_to_warc = function(url, http_stat)
     retry_url = true
     return false
   end
-  if http_stat["len"] == 0
-    and status_code == 200
-    and not video_candidate
-    and not string.match(lower_url .. "?", "^https?://video%.sina%.com%.cn/share/video/[0-9]+%.swf%?") then
-    retry_url = true
-    return false
+  local expected = nil
+  if headers["etag"] then
+    expected = string.match(headers["etag"][1], "^\"([0-9a-fA-F]+)\"%-?$")
+  end
+  if http_stat["len"] == 0 and status_code == 200 then
+    if video_candidate then
+      if not headers["x-filesize"]
+        or tonumber(headers["x-filesize"][1]) ~= 0
+        or not expected
+        or string.lower(expected) ~= "d41d8cd98f00b204e9800998ecf8427e" then
+        io.stdout:write("Empty media response with bad MD5 or size, retrying.\n")
+        io.stdout:flush()
+        retry_url = true
+        return false
+      end
+    elseif not string.match(lower_url .. "?", "^https?://video%.sina%.com%.cn/share/video/[0-9]+%.swf%?") then
+      retry_url = true
+      return false
+    end
   end
   if status_code == 200 then
     for _, check in ipairs({
@@ -856,22 +869,41 @@ wget.callbacks.write_to_warc = function(url, http_stat)
   end
   if context["media_urls"][lower_url]
     and status_code == 200
-    and http_stat["len"] > 0
-    and not string.match(content_type, "^application/json")
-    and not string.match(content_type, "^text/") then
-    if headers["x-filesize"] and http_stat["len"] ~= tonumber(headers["x-filesize"][1]) then
+    and http_stat["len"] > 0 then
+    local file = assert(io.open(http_stat["local_file"], "rb"))
+    local prefix = file:read(512)
+    file:close()
+    prefix = string.gsub(prefix, "^\239\187\191", "")
+    if string.match(prefix, "^%s*<") then
+      io.stdout:write("XML returned instead of media, retrying.\n")
+      io.stdout:flush()
       retry_url = true
       return false
     end
-    local expected = nil
-    if headers["x-filesize"] and headers["etag"] then
-      expected = string.match(headers["etag"][1], "^\"([0-9a-fA-F]+)\"$")
+  end
+  if context["media_urls"][lower_url]
+    and status_code == 200
+    and http_stat["len"] > 0
+    and (
+      video_file_id
+      or (
+        not string.match(content_type, "^application/json")
+        and not string.match(content_type, "^text/")
+      )
+    ) then
+    if headers["x-filesize"]
+      and http_stat["len"] ~= tonumber(headers["x-filesize"][1]) then
+      retry_url = true
+      return false
+    end
+    if not expected or string.len(expected) ~= 32 then
+      io.stdout:write("Missing or bad etag, retrying.\n")
+      io.stdout:flush()
+      retry_url = true
+      return false
     end
     local sha1 = openssl_digest.new("sha1")
-    local md5 = nil
-    if expected and string.len(expected) == 32 then
-      md5 = openssl_digest.new("md5")
-    end
+    local md5 = openssl_digest.new("md5")
     local file = assert(io.open(http_stat["local_file"], "rb"))
     while true do
       local data = file:read(16 * 1024 * 1024)
@@ -879,12 +911,10 @@ wget.callbacks.write_to_warc = function(url, http_stat)
         break
       end
       sha1:update(data)
-      if md5 then
-        md5:update(data)
-      end
+      md5:update(data)
     end
     file:close()
-    if md5 and basexx.to_hex(md5:final()) ~= string.upper(expected) then
+    if basexx.to_hex(md5:final()) ~= string.upper(expected) then
       error("File does not match etag.")
     end
     context["digests"][url["url"]] = "sha1:" .. basexx.to_base32(sha1:final())
